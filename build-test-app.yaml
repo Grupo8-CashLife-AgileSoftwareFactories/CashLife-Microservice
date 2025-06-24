@@ -1,0 +1,91 @@
+name: CI/CD Backend Microservices
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: safe-budget
+  JAVA_VERSION: 21
+
+jobs:
+
+  build-and-test:
+    name: 🛠️ Build and Test Microservices
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api-gateway, discovery-server-iam, profile-service, user-service, financial-information-service, transaction-service]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Build with Maven
+        run: |
+          cd backend/${{ matrix.service }}
+          ./mvnw clean install -DskipTests
+
+      - name: Run Tests
+        run: |
+          cd backend/${{ matrix.service }}
+          ./mvnw test
+
+  dockerize:
+    name: Dockerize and Push to AWS ECR
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api-gateway, discovery-server-iam, profile-service, user-service, financial-information-service, transaction-service]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and push Docker image
+        run: |
+          cd backend/${{ matrix.service }}
+          IMAGE_TAG=${{ github.sha }}
+          docker build -t $ECR_REPOSITORY/${{ matrix.service }}:$IMAGE_TAG .
+          docker tag $ECR_REPOSITORY/${{ matrix.service }}:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/${ECR_REPOSITORY}-${{ matrix.service }}:$IMAGE_TAG
+          docker push ${{ steps.login-ecr.outputs.registry }}/${ECR_REPOSITORY}-${{ matrix.service }}:$IMAGE_TAG
+
+  deploy:
+    name: Deploy to AWS EC2 (or ECS)
+    needs: dockerize
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into EC2 and deploy containers
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}-api-gateway:${{ github.sha }}
+            docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}-user-service:${{ github.sha }}
+            docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}-transaction-service:${{ github.sha }}
+            # Reemplaza containers en ejecución
+            docker-compose down
+            docker-compose up -d

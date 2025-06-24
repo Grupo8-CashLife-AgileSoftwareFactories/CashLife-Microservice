@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  discovery-server:
+    image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/safe-budget-discovery-server-iam:latest
+    ports:
+      - "8761:8761"
+
+  api-gateway:
+    image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/safe-budget-api-gateway:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      - discovery-server
+
+  user-service:
+    image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/safe-budget-user-service:latest
+    depends_on:
+      - discovery-server
+
+  transaction-service:
+    image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/safe-budget-transaction-service:latest
+    depends_on:
+      - discovery-server
