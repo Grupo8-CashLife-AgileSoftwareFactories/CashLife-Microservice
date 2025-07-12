@@ -10,9 +10,6 @@ COPY . .
 # Given permissions to mvnw
 RUN chmod +x mvnw
 
-# Build the application (requires Maven or Gradle)
-RUN ./mvnw clean package -DskipTests
-
 # Stage 2: Run the application
 FROM eclipse-temurin:23-jre
 
