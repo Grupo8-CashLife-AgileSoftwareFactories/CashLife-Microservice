@@ -1,27 +1,29 @@
-FROM openjdk:21-jdk-slim
-LABEL authors='Usuario'
+# Stage 1: Build the application
+FROM eclipse-temurin:23-jdk AS builder
 
-# Crear usuario no root
-RUN useradd -ms /bin/bash appuser
-# Instalar dependencias necesarias
-RUN apt-get update && \
-    apt-get install -y curl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-VOLUME /app/logs /app/config /app/data /app/temp /app/uploads /app/backups /app/keys /app/scripts
-
+# Set the working directory
 WORKDIR /app
 
-COPY target/*.jar app.jar
+# Copy the application code
+COPY . .
 
+# Given permissions to mvnw
+RUN chmod +x mvnw
+
+# Build the application (requires Maven or Gradle)
+RUN ./mvnw clean package -DskipTests
+
+# Stage 2: Run the application
+FROM eclipse-temurin:23-jre
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the JAR file from the builder stage
+COPY --from=builder /app/target/*.jar app.jar
+
+# Expose the port the app will run on
 EXPOSE 8080
 
-ENV JAVA_OPTS=""
-ENV SPRING_PROFILES_ACTIVE=prod
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 CMD curl -f http://localhost:8080/actuator/health || exit 1
-
-USER appuser
-
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dspring.profiles.active=$SPRING_PROFILES_ACTIVE -jar app.jar"]
+# Command to run the application
+ENTRYPOINT ["java", "-jar", "app.jar"]
