@@ -8,6 +8,8 @@ COPY . .
 
 # Grant execution permissions to mvnw
 RUN chmod +x ./mvnw
+RUN apt-get update && apt-get install -y maven
+RUN mvn package -DskipTests
 
 # Stage 2: Run the application
 FROM eclipse-temurin:21-jdk
