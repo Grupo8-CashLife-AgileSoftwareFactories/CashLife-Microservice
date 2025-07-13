@@ -1,26 +1,29 @@
-From eclipse-temurin:21-jdk as builder
+# Stage 1: Build the application
+FROM eclipse-temurin:23-jdk AS builder
 
 # Set the working directory
 WORKDIR /app
 
-# Copy the pom.xml and the source code
+# Copy the application code
 COPY . .
 
-# Grant execution permissions to mvnw
-RUN chmod +x ./mvnw
-RUN apt-get update && apt-get install -y maven
-RUN mvn package -DskipTests
+# Given permissions to mvnw
+RUN chmod +x mvnw
+
+# Build the application (requires Maven or Gradle)
+RUN ./mvnw clean package -DskipTests
 
 # Stage 2: Run the application
-FROM eclipse-temurin:21-jdk
+FROM eclipse-temurin:23-jre
 
 # Set the working directory
 WORKDIR /app
 
-# Copy the built JAR file from the builder stage
+# Copy the JAR file from the builder stage
 COPY --from=builder /app/target/*.jar app.jar
 
-# Expose the application port
+# Expose the port the app will run on
 EXPOSE 8080
 
+# Command to run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]
